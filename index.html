@@ -38,6 +38,22 @@
     .nav-cta:hover{background:var(--yellow2);transform:translateY(-2px);box-shadow:0 6px 20px rgba(251,223,0,.4)}
     @media(max-width:760px){.nav-links{display:none}}
 
+    .immat-fallback {
+  margin-top: 0.75rem;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+.immat-fallback a {
+  color: var(--dark);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color 0.2s;
+}
+.immat-fallback a:hover {
+  color: var(--purple);
+}
     .container{max-width:980px;margin:0 auto;padding:0 2rem}
     #hero{background:var(--dark);padding:4.5rem 0}
     .hero-wrap{display:grid;grid-template-columns:1fr 420px;gap:3rem;align-items:center}
@@ -67,6 +83,12 @@
     .immat-inner h2{font-family:var(--fd);font-size:44px;color:var(--dark);line-height:1;margin-bottom:.4rem}
     .immat-inner>p{color:rgba(0,0,0,.55);font-size:14px;margin:0 auto 1.75rem;max-width:480px}
     .immat-form{display:flex;max-width:520px;margin:0 auto 1rem;border-radius:5px;overflow:hidden;border:2.5px solid var(--dark);background:var(--white)}
+    <div class="immat-fallback">
+  🔍 La recherche intégrée ne fonctionne pas ? 
+  <a href="https://www.yuasa.com/fr/#vehicle-search" target="_blank" rel="noopener noreferrer">
+    RDV sur le site de notre partenaire Yuasa directement !
+  </a>
+</div>
     .immat-flag{background:var(--dark);display:flex;align-items:center;gap:6px;padding:0 14px;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--cream);white-space:nowrap;flex-shrink:0}
     .flag-fr{width:20px;height:14px;background:linear-gradient(to right,#002395 33%,#fff 33% 66%,#ED2939 66%);border-radius:2px;border:.5px solid rgba(0,0,0,.2)}
     .immat-input{flex:1;border:none;outline:none;font-family:var(--fd);font-size:30px;letter-spacing:4px;padding:10px 14px;text-transform:uppercase;background:var(--white);color:var(--dark);min-width:0}
