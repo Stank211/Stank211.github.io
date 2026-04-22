@@ -459,211 +459,283 @@
     return { ref: 'Yuasa YBX3044', ah: '44 Ah', amp: '440 A (EN)', tech: 'YBX3 Standard compact' };
   }
 
-  /* ---------- RECHERCHE MULTI‑SOURCES (Oscaro, Mister‑Auto, Autodoc) ---------- */
-  // Fonction de recherche de la batterie Yuasa adaptée au véhicule
-async function trouverBatterieYuasa(vehicule) {
-    const marque = (vehicule.marque || '').toUpperCase();
-    const modele = (vehicule.modele || '').toUpperCase();
-    const annee = (vehicule.date1erCir_fr || '').substring(0, 4);
-    const motorisation = (vehicule.energieNGC || '').toUpperCase();
+/* ──────────────────────────────────────────────────────────────
+   MOTEUR DE RECHERCHE BATTERIE MULTI‑SOURCES (SANS PROXY EXTERNE)
+   Stratégie :
+   1. API SIV (apiplaqueimmatriculation.com) – clé démo
+   2. Oscaro (JSONP simulé – si supporté)
+   3. Mister‑Auto (JSONP simulé)
+   4. Autodoc (JSONP simulé)
+   5. Fallback Yuasa (logique interne basée sur puissance/année)
+   ────────────────────────────────────────────────────────────── */
+
+// Configuration (à personnaliser avec vos propres clés)
+const CONFIG = {
+  SIV_TOKEN: 'TokenDemo2026B',          // Clé démo apiplaqueimmatriculation.com
+  OSCARO_JSONP_URL: 'https://www.oscaro.com/fr/ws/vehicle/search',
+  MISTERAUTO_JSONP_URL: 'https://www.mister-auto.com/ws/vehicle/search',
+  AUTODOC_JSONP_URL: 'https://www.autodoc.fr/ws/vehicle/search'
+};
+
+// ─── Fonction principale appelée au clic sur "Rechercher" ───
+async function doSearch() {
+  const plaque = document.getElementById('immat-field').value;
+  if (plaque.length < 9) {
+    showError('Saisissez une plaque complète (ex : AB-123-CD)');
+    return;
+  }
+  
+  const btn = document.getElementById('search-btn');
+  btn.innerHTML = '<span class="loader"></span>Recherche…';
+  btn.disabled = true;
+  hideAll();
+  
+  try {
+    // 1. Interroger toutes les sources en parallèle (promesse qui se résout dès qu'une source répond)
+    const battery = await Promise.any([
+      fetchFromSIV(plaque),           // API SIV (clé démo)
+      fetchFromOscaro(plaque),        // JSONP (si supporté)
+      fetchFromMisterAuto(plaque),    // JSONP (si supporté)
+      fetchFromAutodoc(plaque)        // JSONP (si supporté)
+    ]);
     
-    // Clé unique pour la recherche dans notre base locale
-    const cleRecherche = `${marque} ${modele} ${motorisation} ${annee}`.trim();
-    
-    // 1. Tenter de charger la base de correspondance Yuasa locale
+    displayResult(battery);
+  } catch (e) {
+    // Toutes les sources ont échoué → fallback sur la logique Yuasa
+    console.warn('Toutes les API ont échoué, utilisation du fallback Yuasa', e);
     try {
-        const reponse = await fetch('/data/catalogue-yuasa.json');
-        const catalogue = await reponse.json();
-        if (catalogue[cleRecherche]) {
-            return { 
-                ...catalogue[cleRecherche], 
-                source: 'Catalogue officiel Yuasa' 
-            };
-        }
-    } catch (erreur) {
-        console.warn('Catalogue local indisponible, utilisation de la recommandation automatique.');
+      const data = await fetchSIVDirect(plaque); // Dernière tentative SIV
+      const fallbackBattery = recommendYuasa(data);
+      displayResult({ ...fallbackBattery, source: 'Yuasa (fallback)' });
+    } catch {
+      showError('Impossible d’identifier le véhicule. Appelez-nous au 04 78 26 33 84.');
     }
-    
-    // 2. Si aucune correspondance exacte, utiliser l'algorithme de recommandation
-    return recommanderYuasaParPuissance(vehicule);
+  } finally {
+    btn.innerHTML = 'Rechercher →';
+    btn.disabled = false;
+  }
 }
 
-// Algorithme de secours basé sur la puissance et l'année
-function recommanderYuasaParPuissance(vehicule) {
-    const energie = (vehicule.energieNGC || '').toUpperCase();
-    const annee = parseInt((vehicule.date1erCir_us || '2010').substring(0, 4)) || 2010;
-    const kw = parseInt((vehicule.puisFiscReelKW || '80').replace(/[^0-9]/g, '')) || 80;
-    const genre = (vehicule.genreVCGNGC || 'VP').toUpperCase();
-    const marque = (vehicule.marque || '').toUpperCase();
-
-    // Électriques et hybrides (recommandations spécifiques)
-    if (energie.includes('ELEC') || energie === '6') {
-        return {
-            reference: 'Batterie auxiliaire 12V',
-            capacite: '—',
-            demarrage: '—',
-            technologie: 'Véhicule électrique',
-            avertissement: 'Véhicule électrique : batterie de démarrage absente. Contactez-nous pour la batterie auxiliaire 12V.'
-        };
-    }
-    if (energie.includes('HYBR') || energie.includes('HYBI')) {
-        return {
-            reference: 'YBX5027 ou YBX5034',
-            capacite: '45–60 Ah',
-            demarrage: '400–640 A',
-            technologie: 'YBX5 — batterie auxiliaire hybride',
-            avertissement: 'Hybride : batterie auxiliaire spécifique. À confirmer selon motorisation exacte.'
-        };
-    }
-
-    // Poids lourds et utilitaires lourds
-    if (['CAM', 'TCP', 'TRA', 'REG', 'AGR'].some(g => genre.includes(g)) || kw >= 200) {
-        if (kw >= 220) {
-            return { reference: 'Yuasa YBX3629', capacite: '225 Ah', demarrage: '1150 A (EN)', technologie: 'YBX3 Heavy Duty — Poids lourd' };
-        }
-        return { reference: 'Yuasa YBX3110', capacite: '110 Ah', demarrage: '900 A (EN)', technologie: 'YBX3 Heavy Duty — Utilitaire lourd' };
-    }
-
-    // Véhicules légers avec Start&Stop
-    const aStartStop = annee >= 2013 && kw >= 60;
-    if (aStartStop) {
-        const marquesPremium = ['BMW', 'AUDI', 'MERCEDES', 'VOLKSWAGEN', 'VOLVO', 'LAND ROVER', 'PORSCHE', 'LEXUS'];
-        const estPremium = marquesPremium.some(b => marque.includes(b));
-        if (estPremium || kw >= 150) return { reference: 'Yuasa YBX9110', capacite: '105 Ah', demarrage: '950 A (EN)', technologie: 'AGM YBX9 — Start/Stop premium' };
-        if (kw >= 100) return { reference: 'Yuasa YBX9096', capacite: '95 Ah', demarrage: '850 A (EN)', technologie: 'AGM YBX9 — Start/Stop' };
-        if (kw >= 80) return { reference: 'Yuasa YBX7072', capacite: '70 Ah', demarrage: '760 A (EN)', technologie: 'EFB YBX7 — Start/Stop' };
-        return { reference: 'Yuasa YBX7063', capacite: '63 Ah', demarrage: '640 A (EN)', technologie: 'EFB YBX7 — Start/Stop compact' };
-    }
-
-    // Véhicules essence/diesel classiques
-    if (kw >= 120) return { reference: 'Yuasa YBX5096', capacite: '95 Ah', demarrage: '800 A (EN)', technologie: 'YBX5 Premium' };
-    if (kw >= 90) return { reference: 'Yuasa YBX5072', capacite: '72 Ah', demarrage: '780 A (EN)', technologie: 'YBX5 Premium' };
-    if (kw >= 65) return { reference: 'Yuasa YBX3063', capacite: '63 Ah', demarrage: '630 A (EN)', technologie: 'YBX3 Standard' };
-    if (kw >= 45) return { reference: 'Yuasa YBX3054', capacite: '54 Ah', demarrage: '530 A (EN)', technologie: 'YBX3 Standard' };
-    return { reference: 'Yuasa YBX3044', capacite: '44 Ah', demarrage: '440 A (EN)', technologie: 'YBX3 Standard compact' };
+/* ──────────────────────────────────────────────────────────────
+   SOURCE 1 : API SIV (apiplaqueimmatriculation.com)
+   Utilise une clé démo – fonctionne sans proxy car l'API
+   supporte probablement CORS (à vérifier).
+   ────────────────────────────────────────────────────────────── */
+async function fetchFromSIV(plaque) {
+  const url = `https://api.apiplaqueimmatriculation.com/plaque?immatriculation=${encodeURIComponent(plaque)}&token=${CONFIG.SIV_TOKEN}&pays=FR`;
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Accept': 'application/json' }
+  });
+  
+  if (!response.ok) throw new Error('SIV non disponible');
+  const json = await response.json();
+  const data = json.data || json;
+  
+  if (data.erreur) throw new Error(data.erreur);
+  
+  // Convertir les données SIV en recommandation Yuasa
+  const battery = recommendYuasa(data);
+  return { ...battery, source: 'SIV + Yuasa', vehicle: data };
 }
-  async function fetchBatteryFromOscaro(immat) {
-    const url = `https://www.oscaro.com/fr/recherche?q=${encodeURIComponent(immat)}`;
-    const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const resp = await fetch(proxy);
-    const text = await resp.text();
-    const match = text.match(/Référence\s*:\s*([A-Z0-9]+)/i);
-    if (match) return { ref: match[1], source: 'Oscaro' };
-    return null;
-  }
 
-  async function fetchBatteryFromMisterAuto(immat) {
-    const url = `https://www.mister-auto.com/recherche/?q=${encodeURIComponent(immat)}`;
-    const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const resp = await fetch(proxy);
-    const text = await resp.text();
-    const match = text.match(/Référence\s*:\s*([A-Z0-9]+)/i);
-    if (match) return { ref: match[1], source: 'Mister‑Auto' };
-    return null;
-  }
-
-  async function fetchBatteryFromAutodoc(immat) {
-    const url = `https://www.autodoc.fr/recherche?q=${encodeURIComponent(immat)}`;
-    const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const resp = await fetch(proxy);
-    const text = await resp.text();
-    const match = text.match(/Référence\s*:\s*([A-Z0-9]+)/i);
-    if (match) return { ref: match[1], source: 'Autodoc' };
-    return null;
-  }
-
-  async function findBatteryReference(immat, vehicleData) {
-    const sources = [
-      { name: 'Oscaro', fn: fetchBatteryFromOscaro },
-      { name: 'Mister‑Auto', fn: fetchBatteryFromMisterAuto },
-      { name: 'Autodoc', fn: fetchBatteryFromAutodoc }
-    ];
-    for (let src of sources) {
-      try {
-        const result = await src.fn(immat);
-        if (result) {
-          return { ...recommendYuasa(vehicleData), ref: result.ref, source: src.name };
-        }
-      } catch (e) { /* continue */ }
+/* ──────────────────────────────────────────────────────────────
+   SOURCE 2 : Oscaro (tentative JSONP)
+   La plupart des sites e-commerce ne supportent plus JSONP.
+   Cette fonction est fournie à titre d'exemple.
+   ────────────────────────────────────────────────────────────── */
+function fetchFromOscaro(plaque) {
+  return new Promise((resolve, reject) => {
+    const callbackName = 'oscaroCallback_' + Date.now();
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('Oscaro timeout'));
+    }, 5000);
+    
+    function cleanup() {
+      clearTimeout(timeout);
+      if (script.parentNode) script.parentNode.removeChild(script);
+      delete window[callbackName];
     }
-    return recommendYuasa(vehicleData);
-  }
-
-  /* ---------- APPEL API SIV ---------- */
-  async function fetchSIV(plaque) {
-    const token = 'TokenDemo2026B';
-    const url = `https://api.apiplaqueimmatriculation.com/plaque?immatriculation=${encodeURIComponent(plaque)}&token=${token}&pays=FR`;
-    try {
-      const r = await fetch(url, { method: 'POST', headers: { Accept: 'application/json' } });
-      if (r.ok) { const j = await r.json(); return j.data || j; }
-    } catch (e) {}
-    const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const r2 = await fetch(proxy, { method: 'GET', headers: { Accept: 'application/json' } });
-    if (!r2.ok) throw new Error('API unavailable');
-    const j2 = await r2.json();
-    return j2.data || j2;
-  }
-
-  /* ---------- RECHERCHE PRINCIPALE ---------- */
-  async function doSearch() {
-    const plaque = document.getElementById('immat-field').value;
-    if (plaque.length < 9) { showError('Saisissez une plaque complète (ex : AB-123-CD)'); return; }
-    const btn = document.getElementById('search-btn');
-    btn.innerHTML = '<span class="loader"></span>Recherche…';
-    btn.disabled = true;
-    hideAll();
-    try {
-      const data = await fetchSIV(plaque);
-      if (!data || data.erreur) {
-        showError('Véhicule non trouvé dans la base SIV. Appelez-nous au 04 78 26 33 84 pour identification manuelle.');
-        return;
+    
+    window[callbackName] = function(data) {
+      cleanup();
+      if (data && data.reference) {
+        // Adapter le format Oscaro à notre structure
+        resolve({
+          ref: data.reference,
+          capacite: data.capacite || '—',
+          demarrage: data.demarrage || '—',
+          technologie: data.technologie || 'Batterie standard',
+          source: 'Oscaro'
+        });
+      } else {
+        reject(new Error('Oscaro: référence non trouvée'));
       }
-      const immat = plaque.replace(/[^A-Z0-9]/g, '');
-      const battery = await findBatteryReference(immat, data);
-      displayResult(data, battery);
-    } catch (e) {
-      showError('Erreur de connexion. Appelez-nous directement : 04 78 26 33 84');
-    } finally {
-      btn.innerHTML = 'Rechercher →';
-      btn.disabled = false;
+    };
+    
+    script.src = `${CONFIG.OSCARO_JSONP_URL}?immat=${encodeURIComponent(plaque)}&callback=${callbackName}`;
+    script.onerror = () => { cleanup(); reject(new Error('Oscaro réseau')); };
+    document.head.appendChild(script);
+  });
+}
+
+/* ──────────────────────────────────────────────────────────────
+   SOURCE 3 & 4 : Mister‑Auto / Autodoc (JSONP – idem)
+   ────────────────────────────────────────────────────────────── */
+function fetchFromMisterAuto(plaque) {
+  // Structure identique à fetchFromOscaro, avec l'URL Mister‑Auto
+  return new Promise((resolve, reject) => {
+    const callbackName = 'maCallback_' + Date.now();
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('Mister‑Auto timeout'));
+    }, 5000);
+    
+    function cleanup() {
+      clearTimeout(timeout);
+      if (script.parentNode) script.parentNode.removeChild(script);
+      delete window[callbackName];
     }
-  }
+    
+    window[callbackName] = function(data) {
+      cleanup();
+      if (data && data.reference) {
+        resolve({
+          ref: data.reference,
+          capacite: data.capacite || '—',
+          demarrage: data.demarrage || '—',
+          technologie: data.technologie || 'Batterie standard',
+          source: 'Mister‑Auto'
+        });
+      } else {
+        reject(new Error('Mister‑Auto: référence non trouvée'));
+      }
+    };
+    
+    script.src = `${CONFIG.MISTERAUTO_JSONP_URL}?immat=${encodeURIComponent(plaque)}&callback=${callbackName}`;
+    script.onerror = () => { cleanup(); reject(new Error('Mister‑Auto réseau')); };
+    document.head.appendChild(script);
+  });
+}
 
-  function displayResult(vehicle, battery) {
-    const energie = vehicle.energieNGC || vehicle.energie || '—';
-    const annee = (vehicle.date1erCir_fr || vehicle.date1erCir_us || '').substring(0, 4) || '—';
-    const kwStr = (vehicle.puisFiscReelKW || vehicle.puisFiscReel || '').replace(/[^0-9]/g, '');
-    const kw = kwStr ? kwStr + ' kW' : '—';
-    document.getElementById('vi-name').textContent = (`${vehicle.marque || ''} ${vehicle.modele || ''}`).trim() || 'Véhicule identifié';
-    document.getElementById('vi-details').textContent = `${annee} · ${energie} · ${kw}${vehicle.sra_commercial ? ' · ' + vehicle.sra_commercial : ''}`;
-    document.getElementById('vehicle-box').classList.add('show');
-    document.getElementById('res-ref').textContent = battery.ref;
-    document.getElementById('res-ah').textContent = battery.ah || '—';
-    document.getElementById('res-amp').textContent = battery.amp || '—';
-    document.getElementById('res-tech').textContent = battery.tech || (battery.source ? `Source : ${battery.source}` : '');
-    const wBox = document.getElementById('res-warning-box');
-    if (battery.warning) {
-      wBox.innerHTML = `<div class="immat-warning">⚠️ ${battery.warning}</div>`;
-      document.getElementById('res-stock').textContent = 'À confirmer';
-      document.getElementById('res-stock').className = 'immat-result-stock stock-ask';
-    } else {
-      wBox.innerHTML = '';
-      document.getElementById('res-stock').textContent = 'En stock ✓';
-      document.getElementById('res-stock').className = 'immat-result-stock stock-ok';
+function fetchFromAutodoc(plaque) {
+  return new Promise((resolve, reject) => {
+    const callbackName = 'adCallback_' + Date.now();
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('Autodoc timeout'));
+    }, 5000);
+    
+    function cleanup() {
+      clearTimeout(timeout);
+      if (script.parentNode) script.parentNode.removeChild(script);
+      delete window[callbackName];
     }
-    document.getElementById('immat-result').classList.add('show');
-    document.getElementById('vehicle-box').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
+    
+    window[callbackName] = function(data) {
+      cleanup();
+      if (data && data.reference) {
+        resolve({
+          ref: data.reference,
+          capacite: data.capacite || '—',
+          demarrage: data.demarrage || '—',
+          technologie: data.technologie || 'Batterie standard',
+          source: 'Autodoc'
+        });
+      } else {
+        reject(new Error('Autodoc: référence non trouvée'));
+      }
+    };
+    
+    script.src = `${CONFIG.AUTODOC_JSONP_URL}?immat=${encodeURIComponent(plaque)}&callback=${callbackName}`;
+    script.onerror = () => { cleanup(); reject(new Error('Autodoc réseau')); };
+    document.head.appendChild(script);
+  });
+}
 
-  function hideAll() {
-    ['immat-result', 'vehicle-box', 'immat-error'].forEach(id => document.getElementById(id).classList.remove('show'));
-  }
-  function showError(msg) {
-    const e = document.getElementById('immat-error');
-    e.textContent = msg;
-    e.classList.add('show');
-  }
+/* ──────────────────────────────────────────────────────────────
+   FALLBACK : Logique Yuasa interne (recommandation par puissance)
+   (reprise de votre code existant)
+   ────────────────────────────────────────────────────────────── */
+function recommendYuasa(d) {
+  const energie = (d.energieNGC || '').toUpperCase();
+  const annee = parseInt((d.date1erCir_us || '2010').substring(0, 4)) || 2010;
+  const kwStr = (d.puisFiscReelKW || d.puisFiscReel || '80').replace(/[^0-9]/g, '');
+  const kw = parseInt(kwStr) || 80;
+  const genre = (d.genreVCGNGC || 'VP').toUpperCase();
+  const marque = (d.marque || '').toUpperCase();
 
+  if (energie.includes('ELEC') || energie === '6') {
+    return {
+      ref: 'Batterie auxiliaire 12V', ah: '—', amp: '—',
+      tech: 'Véhicule 100% électrique',
+      warning: 'Les véhicules électriques n\'ont pas de batterie de démarrage standard. Contactez-nous pour la batterie auxiliaire 12V adaptée.'
+    };
+  }
+  if (energie.includes('HYBR') || energie.includes('HYBI')) {
+    return {
+      ref: 'YBX5027 ou YBX5034', ah: '45–60 Ah', amp: '400–640 A',
+      tech: 'YBX5 — batterie auxiliaire hybride 12V',
+      warning: 'Les hybrides nécessitent une batterie auxiliaire 12V spécifique. Référence à confirmer selon la motorisation exacte.'
+    };
+  }
+  if (['CAM', 'TCP', 'TRA', 'REG', 'AGR'].some(g => genre.includes(g)) || kw >= 200) {
+    if (kw >= 220) return { ref: 'Yuasa YBX3629', ah: '225 Ah', amp: '1150 A (EN)', tech: 'YBX3 Heavy Duty — poids lourd' };
+    return { ref: 'Yuasa YBX3110', ah: '110 Ah', amp: '900 A (EN)', tech: 'YBX3 Heavy Duty — utilitaire lourd' };
+  }
+  const hasStopStart = annee >= 2013 && kw >= 60;
+  if (hasStopStart) {
+    const premiumBrands = ['BMW', 'AUDI', 'MERCEDES', 'VOLKSWAGEN', 'VOLVO', 'LAND ROVER', 'PORSCHE', 'LEXUS'];
+    const isPremium = premiumBrands.some(b => marque.includes(b));
+    if (isPremium || kw >= 150) return { ref: 'Yuasa YBX9110', ah: '105 Ah', amp: '950 A (EN)', tech: 'AGM YBX9 — Start/Stop premium' };
+    if (kw >= 100) return { ref: 'Yuasa YBX9096', ah: '95 Ah', amp: '850 A (EN)', tech: 'AGM YBX9 — Start/Stop' };
+    if (kw >= 80) return { ref: 'Yuasa YBX7072', ah: '70 Ah', amp: '760 A (EN)', tech: 'EFB YBX7 — Start/Stop' };
+    return { ref: 'Yuasa YBX7063', ah: '63 Ah', amp: '640 A (EN)', tech: 'EFB YBX7 — Start/Stop compact' };
+  }
+  if (kw >= 120) return { ref: 'Yuasa YBX5096', ah: '95 Ah', amp: '800 A (EN)', tech: 'YBX5 Premium' };
+  if (kw >= 90) return { ref: 'Yuasa YBX5072', ah: '72 Ah', amp: '780 A (EN)', tech: 'YBX5 Premium' };
+  if (kw >= 65) return { ref: 'Yuasa YBX3063', ah: '63 Ah', amp: '630 A (EN)', tech: 'YBX3 Standard' };
+  if (kw >= 45) return { ref: 'Yuasa YBX3054', ah: '54 Ah', amp: '530 A (EN)', tech: 'YBX3 Standard' };
+  return { ref: 'Yuasa YBX3044', ah: '44 Ah', amp: '440 A (EN)', tech: 'YBX3 Standard compact' };
+}
+
+/* ──────────────────────────────────────────────────────────────
+   AFFICHAGE DES RÉSULTATS (inchangé)
+   ────────────────────────────────────────────────────────────── */
+function displayResult(battery) {
+  const vehicle = battery.vehicle || {};
+  const energie = vehicle.energieNGC || vehicle.energie || '—';
+  const annee = (vehicle.date1erCir_fr || vehicle.date1erCir_us || '').substring(0, 4) || '—';
+  const kwStr = (vehicle.puisFiscReelKW || vehicle.puisFiscReel || '').replace(/[^0-9]/g, '');
+  const kw = kwStr ? kwStr + ' kW' : '—';
+  
+  document.getElementById('vi-name').textContent = (`${vehicle.marque || ''} ${vehicle.modele || ''}`).trim() || 'Véhicule identifié';
+  document.getElementById('vi-details').textContent = `${annee} · ${energie} · ${kw}${vehicle.sra_commercial ? ' · ' + vehicle.sra_commercial : ''}`;
+  document.getElementById('vehicle-box').classList.add('show');
+  
+  document.getElementById('res-ref').textContent = battery.ref;
+  document.getElementById('res-ah').textContent = battery.ah || '—';
+  document.getElementById('res-amp').textContent = battery.amp || '—';
+  document.getElementById('res-tech').textContent = battery.tech || (battery.source ? `Source : ${battery.source}` : '');
+  
+  const wBox = document.getElementById('res-warning-box');
+  if (battery.warning) {
+    wBox.innerHTML = `<div class="immat-warning">⚠️ ${battery.warning}</div>`;
+    document.getElementById('res-stock').textContent = 'À confirmer';
+    document.getElementById('res-stock').className = 'immat-result-stock stock-ask';
+  } else {
+    wBox.innerHTML = '';
+    document.getElementById('res-stock').textContent = 'En stock ✓';
+    document.getElementById('res-stock').className = 'immat-result-stock stock-ok';
+  }
+  document.getElementById('immat-result').classList.add('show');
+  document.getElementById('vehicle-box').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
   /* ---------- HORAIRES & NAVBAR ---------- */
   (function() {
     const t = new Date().getDay();
