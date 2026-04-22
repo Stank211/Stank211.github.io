@@ -460,6 +460,88 @@
   }
 
   /* ---------- RECHERCHE MULTI‑SOURCES (Oscaro, Mister‑Auto, Autodoc) ---------- */
+  // Fonction de recherche de la batterie Yuasa adaptée au véhicule
+async function trouverBatterieYuasa(vehicule) {
+    const marque = (vehicule.marque || '').toUpperCase();
+    const modele = (vehicule.modele || '').toUpperCase();
+    const annee = (vehicule.date1erCir_fr || '').substring(0, 4);
+    const motorisation = (vehicule.energieNGC || '').toUpperCase();
+    
+    // Clé unique pour la recherche dans notre base locale
+    const cleRecherche = `${marque} ${modele} ${motorisation} ${annee}`.trim();
+    
+    // 1. Tenter de charger la base de correspondance Yuasa locale
+    try {
+        const reponse = await fetch('/data/catalogue-yuasa.json');
+        const catalogue = await reponse.json();
+        if (catalogue[cleRecherche]) {
+            return { 
+                ...catalogue[cleRecherche], 
+                source: 'Catalogue officiel Yuasa' 
+            };
+        }
+    } catch (erreur) {
+        console.warn('Catalogue local indisponible, utilisation de la recommandation automatique.');
+    }
+    
+    // 2. Si aucune correspondance exacte, utiliser l'algorithme de recommandation
+    return recommanderYuasaParPuissance(vehicule);
+}
+
+// Algorithme de secours basé sur la puissance et l'année
+function recommanderYuasaParPuissance(vehicule) {
+    const energie = (vehicule.energieNGC || '').toUpperCase();
+    const annee = parseInt((vehicule.date1erCir_us || '2010').substring(0, 4)) || 2010;
+    const kw = parseInt((vehicule.puisFiscReelKW || '80').replace(/[^0-9]/g, '')) || 80;
+    const genre = (vehicule.genreVCGNGC || 'VP').toUpperCase();
+    const marque = (vehicule.marque || '').toUpperCase();
+
+    // Électriques et hybrides (recommandations spécifiques)
+    if (energie.includes('ELEC') || energie === '6') {
+        return {
+            reference: 'Batterie auxiliaire 12V',
+            capacite: '—',
+            demarrage: '—',
+            technologie: 'Véhicule électrique',
+            avertissement: 'Véhicule électrique : batterie de démarrage absente. Contactez-nous pour la batterie auxiliaire 12V.'
+        };
+    }
+    if (energie.includes('HYBR') || energie.includes('HYBI')) {
+        return {
+            reference: 'YBX5027 ou YBX5034',
+            capacite: '45–60 Ah',
+            demarrage: '400–640 A',
+            technologie: 'YBX5 — batterie auxiliaire hybride',
+            avertissement: 'Hybride : batterie auxiliaire spécifique. À confirmer selon motorisation exacte.'
+        };
+    }
+
+    // Poids lourds et utilitaires lourds
+    if (['CAM', 'TCP', 'TRA', 'REG', 'AGR'].some(g => genre.includes(g)) || kw >= 200) {
+        if (kw >= 220) {
+            return { reference: 'Yuasa YBX3629', capacite: '225 Ah', demarrage: '1150 A (EN)', technologie: 'YBX3 Heavy Duty — Poids lourd' };
+        }
+        return { reference: 'Yuasa YBX3110', capacite: '110 Ah', demarrage: '900 A (EN)', technologie: 'YBX3 Heavy Duty — Utilitaire lourd' };
+    }
+
+    // Véhicules légers avec Start&Stop
+    const aStartStop = annee >= 2013 && kw >= 60;
+    if (aStartStop) {
+        const marquesPremium = ['BMW', 'AUDI', 'MERCEDES', 'VOLKSWAGEN', 'VOLVO', 'LAND ROVER', 'PORSCHE', 'LEXUS'];
+        const estPremium = marquesPremium.some(b => marque.includes(b));
+        if (estPremium || kw >= 150) return { reference: 'Yuasa YBX9110', capacite: '105 Ah', demarrage: '950 A (EN)', technologie: 'AGM YBX9 — Start/Stop premium' };
+        if (kw >= 100) return { reference: 'Yuasa YBX9096', capacite: '95 Ah', demarrage: '850 A (EN)', technologie: 'AGM YBX9 — Start/Stop' };
+        if (kw >= 80) return { reference: 'Yuasa YBX7072', capacite: '70 Ah', demarrage: '760 A (EN)', technologie: 'EFB YBX7 — Start/Stop' };
+        return { reference: 'Yuasa YBX7063', capacite: '63 Ah', demarrage: '640 A (EN)', technologie: 'EFB YBX7 — Start/Stop compact' };
+    }
+
+    // Véhicules essence/diesel classiques
+    if (kw >= 120) return { reference: 'Yuasa YBX5096', capacite: '95 Ah', demarrage: '800 A (EN)', technologie: 'YBX5 Premium' };
+    if (kw >= 90) return { reference: 'Yuasa YBX5072', capacite: '72 Ah', demarrage: '780 A (EN)', technologie: 'YBX5 Premium' };
+    if (kw >= 65) return { reference: 'Yuasa YBX3063', capacite: '63 Ah', demarrage: '630 A (EN)', technologie: 'YBX3 Standard' };
+    if (kw >= 45) return { reference: 'Yuasa YBX3054', capacite: '54 Ah', demarrage: '530 A (EN)', technologie: 'YBX3 Standard' };
+    return { reference: 'Yuasa YBX3044', capacite: '44 Ah', demarrage: '440 A (EN)', technologie: 'YBX3 Standard compact' };
+}
   async function fetchBatteryFromOscaro(immat) {
     const url = `https://www.oscaro.com/fr/recherche?q=${encodeURIComponent(immat)}`;
     const proxy = `https://corsproxy.io/?${encodeURIComponent(url)}`;
