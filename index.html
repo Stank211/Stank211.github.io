@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    /* ---------- RESET & VARIABLES (TON STYLE ORIGINAL) ---------- */
+    /* ---------- RESET & VARIABLES ---------- */
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     html{scroll-behavior:smooth}
     body{font-family:'DM Sans',sans-serif;background:#fff6ea;color:#1a1a1a;font-size:15px;line-height:1.65;-webkit-font-smoothing:antialiased;overflow-x:hidden}
@@ -60,7 +60,7 @@
     /* Hero Visuels (Image + Logos) */
     .hero-visuals { display: flex; flex-direction: column; gap: 1.5rem; }
     .hero-company-img { width: 100%; height: 280px; object-fit: cover; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); border: 2px solid rgba(251,223,0,0.2); }
-    .hero-logos-box { display: flex; align-items: center; justify-content: center; gap: 2rem; background: var(--cream); padding: 1.5rem; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+    .hero-logos-box { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 1.5rem 2rem; background: var(--cream); padding: 1.5rem; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
     .hero-logo { height: 40px; object-fit: contain; }
 
     /* ---------- OFFICIEL ---------- */
@@ -81,14 +81,14 @@
     .immat-inner h2{font-family:var(--fd);font-size:44px;color:var(--dark);line-height:1;margin-bottom:.4rem}
     .immat-inner>p{color:rgba(0,0,0,.55);font-size:15px;margin:0 auto 1.75rem;max-width:550px}
     
-    /* Barre de recherche (Avec joli drapeau FR) */
+    /* Barre de recherche */
     .immat-form{display:flex;max-width:520px;margin:0 auto 1.5rem;border-radius:5px;overflow:hidden;border:2.5px solid var(--dark);background:var(--white); opacity: 0.7;}
     .immat-flag{background:var(--dark);display:flex;align-items:center;gap:6px;padding:0 14px;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--cream);white-space:nowrap;flex-shrink:0}
     .flag-fr{width:20px;height:14px;background:linear-gradient(to right,#002395 33%,#fff 33% 66%,#ED2939 66%);border-radius:2px;border:.5px solid rgba(0,0,0,.2)}
     .immat-input{flex:1;border:none;outline:none;font-family:var(--fd);font-size:24px;letter-spacing:2px;padding:10px 14px;text-transform:uppercase;background:#f5f5f5;color:#999;min-width:0;text-align: center;}
     .immat-search-btn{background:#666;color:var(--white);border:none;padding:0 22px;font-family:'DM Sans',sans-serif;font-weight:700;font-size:14px;cursor:not-allowed;white-space:nowrap;flex-shrink:0;}
     
-    /* Box Erreur Toujours Visible */
+    /* Box Erreur */
     .yuasa-fallback-box { background: var(--white); border-radius: 8px; padding: 2rem; box-shadow: 0 8px 30px rgba(0,0,0,0.15); border-left: 5px solid #E11D48; max-width: 600px; margin: 0 auto; text-align: left; }
     .yuasa-fallback-box h4 { font-size: 18px; color: #E11D48; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; font-weight: 700; }
     .yuasa-fallback-box p { color: var(--muted); font-size: 14px; margin-bottom: 1rem; line-height: 1.6; }
@@ -137,7 +137,7 @@
     .why-item h4{font-size:14px;font-weight:600;color:var(--cream);margin-bottom:.3rem}
     .why-item p{font-size:12px;color:rgba(255,246,234,.4);line-height:1.6}
 
-    /* ---------- CONTACT (LE NOUVEAU JOLI VISUEL AVEC TON THEME) ---------- */
+    /* ---------- CONTACT ---------- */
     #contact{background:var(--dark);padding:5rem 0;border-top:2px solid var(--purple)}
     .contact-grid{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:1.5rem;margin-top:3rem}
     .contact-card{background:var(--dark2);border-radius:8px;padding:2rem;border:1px solid var(--purple); display:flex; flex-direction:column;}
@@ -149,7 +149,6 @@
     .map-container{border-radius:6px;border:1px solid var(--purple);overflow:hidden;height:180px;margin-bottom:1rem}
     .map-container iframe{width:100%;height:100%;border:0}
     
-    /* Bouton tout en bas de la carte */
     .btn-bottom { margin-top: auto; display: block; text-align: center; }
 
     .horaires{width:100%;border-collapse:collapse;font-size:13px}
@@ -168,10 +167,8 @@
     .footer-links a{color:rgba(255,246,234,.4);text-decoration:none;font-size:13px;transition:color .2s;}
     .footer-links a:hover{color:var(--yellow)}
 
-
     .btn-itineraire{display:block;text-align:center;background:transparent;color:var(--yellow);border:1.5px solid rgba(251,223,0,.5);padding:10px;border-radius:4px;font-size:13px;font-weight:700;text-decoration:none;margin-top:.75rem;transition:all .22s ease}
     .btn-itineraire:hover{background:rgba(251,223,0,.08);border-color:var(--yellow)}
-
 
     /* ---------- HAMBURGER + MOBILE DRAWER ---------- */
     .hamburger{display:none;flex-direction:column;justify-content:center;align-items:center;width:40px;height:40px;cursor:pointer;gap:5px;flex-shrink:0;background:none;border:none;padding:0}
@@ -186,14 +183,10 @@
     .mob-cta{display:block;background:var(--yellow);color:var(--dark)!important;text-align:center;padding:14px;font-weight:800;font-size:14px;border-radius:4px;text-decoration:none;margin-top:.75rem}
 
     /* ---------- RESPONSIVE ---------- */
-
-    /* Tablette large (≤1100px) */
     @media(max-width:1100px){
       .contact-grid{grid-template-columns:1fr 1fr}
       .contact-grid>.contact-card:first-child{grid-column:1/-1}
     }
-
-    /* Tablette (≤900px) : hamburger, hero en colonne, grilles */
     @media(max-width:900px){
       .nav-links{display:none}
       .nav-cta{display:none}
@@ -207,8 +200,6 @@
       .contact-grid{grid-template-columns:1fr}
       .contact-grid>.contact-card:first-child{grid-column:auto}
     }
-
-    /* Mobile (≤640px) */
     @media(max-width:640px){
       #hero{padding:3rem 0}
       .hero-text h1{font-size:48px}
@@ -227,8 +218,6 @@
       .contact-card{padding:1.5rem}
       .map-container{height:170px}
     }
-
-    /* Petit mobile (≤400px) */
     @media(max-width:400px){
       .hero-text h1{font-size:40px}
       .section-title{font-size:32px}
@@ -284,7 +273,12 @@
       <div class="hero-logos-box">
           <img src="https://github.com/Stank211/Stank211.github.io/blob/main/YUASAb.png?raw=true" alt="Logo Yuasa" class="hero-logo">
           <img src="https://github.com/Stank211/Stank211.github.io/blob/main/FIAMM%20MOTIVE%20POWER.png?raw=true" alt="Logo Fiamm Motive Power" class="hero-logo">
-        </div>
+          <img src="https://github.com/Stank211/Stank211.github.io/blob/main/EXIDE.png?raw=true" alt="Exide" class="hero-logo">
+          <img src="https://github.com/Stank211/Stank211.github.io/blob/main/LEOCH.png?raw=true" alt="Leoch" class="hero-logo">
+          <img src="https://github.com/Stank211/Stank211.github.io/blob/main/Sonnenschein_logo-battery-industryu.png?raw=true" alt="Sonnenschein" class="hero-logo">
+          <img src="https://github.com/Stank211/Stank211.github.io/blob/main/Trojan_Battery_Company_logo.png?raw=true" alt="Trojan" class="hero-logo">
+          <img src="https://github.com/Stank211/Stank211.github.io/blob/main/logo-nero-200x200.png?raw=true" alt="ATIB Charger" class="hero-logo">
+      </div>
     </div>
   </div>
 </section>
