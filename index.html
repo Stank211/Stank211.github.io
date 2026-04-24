@@ -545,82 +545,133 @@
   const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/';
   const OSCARO_API = 'https://www.oscaro.com/api/vehicle/search';
 
-  async function searchByPlate() {
-    const input = document.getElementById('immat-input-real');
-    const loader = document.getElementById('immat-loader');
-    const resultDiv = document.getElementById('vehicle-result');
-    const errorDiv = document.getElementById('immat-error');
-    const searchBlock = document.getElementById('search-form-block');
-    const rawPlate = input.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  /* ---------- CONSTANTES ---------- */
+// Plaque brute (sans tirets)
+function cleanPlate(str) {
+  return str.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+}
 
-    if (rawPlate.length < 4) {
-      alert('Veuillez entrer une plaque valide (ex: AA-123-BB)');
-      return;
+// Formatage visuel (AA-123-BB)
+function formatImmat(el) {
+  let r = el.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  if (r.length > 0) el.value = r.substring(0, 2);
+  if (r.length > 2) el.value += '-' + r.substring(2, 5);
+  if (r.length > 5) el.value += '-' + r.substring(5, 7);
+}
+
+/* ---------- FONCTION PRINCIPALE (ESSAIE 3 SOURCES) ---------- */
+async function searchByPlate() {
+  const input = document.getElementById('immat-input-real');
+  const loader = document.getElementById('immat-loader');
+  const resultDiv = document.getElementById('vehicle-result');
+  const errorDiv = document.getElementById('immat-error');
+  const searchBlock = document.getElementById('search-form-block');
+
+  const rawPlate = cleanPlate(input.value);
+  if (rawPlate.length < 4) {
+    alert('Veuillez entrer une plaque valide (ex: AA-123-BB)');
+    return;
+  }
+
+  // Afficher le loader
+  searchBlock.style.display = 'none';
+  resultDiv.style.display = 'none';
+  errorDiv.style.display = 'none';
+  loader.style.display = 'block';
+
+  let vehicleInfo = null;
+
+  // MÉTHODE 1 : Oscaro via allorigins.win
+  try {
+    const url = `https://api.allorigins.win/get?url=${encodeURIComponent('https://www.oscaro.com/api/vehicle/search')}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data && data.contents) {
+      const json = JSON.parse(data.contents);
+      if (json && json.vehicle_info) {
+        vehicleInfo = json;
+      }
     }
+  } catch (e) {
+    console.warn('Méthode 1 (Oscaro via allorigins) échouée');
+  }
 
-    // Afficher le loader
-    searchBlock.style.display = 'none';
-    resultDiv.style.display = 'none';
-    errorDiv.style.display = 'none';
-    loader.style.display = 'block';
-
+  // MÉTHODE 2 : api-plaque.com (offre gratuite : 10 req/mois)
+  if (!vehicleInfo) {
     try {
-      const response = await fetch(CORS_PROXY + OSCARO_API, {
+      const resp = await fetch(`https://cors-anywhere.herokuapp.com/https://www.api-plaque.com/api/vehicle/${rawPlate}`);
+      const json = await resp.json();
+      if (json && json.success && json.data) {
+        vehicleInfo = {
+          vehicle_info: `${json.data.marque || ''} ${json.data.modele || ''} ${json.data.version || ''}`.trim(),
+          energy: json.data.energie || json.data.carburant || '',
+          power: json.data.puissance || '',
+          year: json.data.annee || ''
+        };
+      }
+    } catch (e) {
+      console.warn('Méthode 2 (api-plaque) échouée');
+    }
+  }
+
+  // MÉTHODE 3 : Corsfix (proxy gratuit, dernier recours)
+  if (!vehicleInfo) {
+    try {
+      const resp = await fetch(`https://corsfix.com/proxy?url=${encodeURIComponent('https://www.oscaro.com/api/vehicle/search')}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ plate: rawPlate })
       });
-
-      if (!response.ok) throw new Error('Erreur réseau');
-
-      const data = await response.json();
-      loader.style.display = 'none';
-
-      if (data && data.vehicle_info) {
-        // Véhicule identifié
-        document.getElementById('vehicle-label').textContent = data.vehicle_info;
-        document.getElementById('vehicle-details').textContent = 
-          (data.energy ? '⛽ ' + data.energy + '  ' : '') +
-          (data.power ? '⚡ ' + data.power + '  ' : '') +
-          (data.year ? '📅 ' + data.year : '');
-
-        // Lien Yuasa avec le modèle
-        const yuasaUrl = 'https://www.yuasa.com/fr/#vehicle-search' + encodeURIComponent(data.vehicle_info.split(' ').slice(0, 3).join(' '));
-        document.getElementById('btn-yuasa-fallback').href = yuasaUrl;
-        document.getElementById('battery-info').innerHTML = 
-          '<p style="font-size:13px;color:var(--muted);">✅ Cliquez pour voir la batterie compatible sur le configurateur Yuasa :</p>';
-
-        resultDiv.style.display = 'block';
-      } else {
-        throw new Error('Véhicule non trouvé');
+      const json = await resp.json();
+      if (json && json.vehicle_info) {
+        vehicleInfo = json;
       }
-    } catch (err) {
-      console.error('Erreur recherche:', err);
-      loader.style.display = 'none';
-      document.getElementById('immat-error-text').textContent = 
-        'Impossible d’identifier automatiquement ce véhicule. Utilisez le configurateur manuel Yuasa ci-dessous.';
-      errorDiv.style.display = 'block';
+    } catch (e) {
+      console.warn('Méthode 3 (corsfix) échouée');
     }
   }
 
-  function resetSearch() {
-    document.getElementById('search-form-block').style.display = 'block';
-    document.getElementById('vehicle-result').style.display = 'none';
-    document.getElementById('immat-error').style.display = 'none';
-    document.getElementById('immat-loader').style.display = 'none';
-    document.getElementById('immat-input-real').value = '';
+  // Traitement du résultat
+  loader.style.display = 'none';
+
+  if (vehicleInfo) {
+    // Succès !
+    document.getElementById('vehicle-label').textContent = vehicleInfo.vehicle_info;
+    document.getElementById('vehicle-details').textContent =
+      (vehicleInfo.energy ? '⛽ ' + vehicleInfo.energy + '  ' : '') +
+      (vehicleInfo.power ? '⚡ ' + vehicleInfo.power + '  ' : '') +
+      (vehicleInfo.year ? '📅 ' + vehicleInfo.year : '');
+
+    // Lien Yuasa avec le modèle détecté
+    const yuasaQuery = encodeURIComponent(vehicleInfo.vehicle_info.split(' ').slice(0, 3).join(' '));
+    document.getElementById('btn-yuasa-fallback').href = `https://www.yuasa.fr/recherche/?q=${yuasaQuery}`;
+    document.getElementById('battery-info').innerHTML =
+      '<p style="font-size:13px;color:var(--muted);">✅ Cliquez pour voir la batterie compatible sur le configurateur Yuasa :</p>';
+
+    resultDiv.style.display = 'block';
+  } else {
+    // Échec total → fallback manuel Yuasa
+    document.getElementById('immat-error-text').textContent =
+      'Impossible d’identifier automatiquement ce véhicule. Cliquez ci‑dessous pour chercher manuellement sur Yuasa.';
+    errorDiv.style.display = 'block';
+
+    // Proposer quand même le lien Yuasa avec la plaque brute
+    document.getElementById('btn-yuasa-fallback').href =
+      `https://www.yuasa.fr/recherche/?q=${encodeURIComponent(rawPlate)}`;
+    document.getElementById('battery-info').innerHTML =
+      '<p style="font-size:13px;color:var(--muted);">🔍 Accédez au configurateur Yuasa avec votre plaque :</p>';
+    resultDiv.style.display = 'block';
   }
+}
 
-  // Touche Entrée dans le champ
-  document.addEventListener('DOMContentLoaded', function() {
-    const input = document.getElementById('immat-input-real');
-    if (input) {
-      input.addEventListener('keypress', function(e) {
-        if (e.key === 'Enter') searchByPlate();
-      });
-    }
-  });
-
+/* ---------- RESET ---------- */
+function resetSearch() {
+  document.getElementById('search-form-block').style.display = 'block';
+  document.getElementById('vehicle-result').style.display = 'none';
+  document.getElementById('immat-error').style.display = 'none';
+  document.getElementById('immat-loader').style.display = 'none';
+  document.getElementById('immat-input-real').value = '';
+}
   /* ---------- HIGHLIGHT HORAIRES ---------- */
   (function() {
     const today = new Date().getDay();
