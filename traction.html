@@ -112,6 +112,11 @@
     .battery-photo-caption{color:rgba(255,246,234,.55);font-size:13px;line-height:1.55;margin-top:.3rem}
     .battery-photo-caption span{color:rgba(255,246,234,.35);font-size:11.5px}
     .battery-photo-img{width:100%;display:block;object-fit:cover;max-height:340px;border-top:1px solid rgba(251,223,0,.1)}
+
+    /* Nouvelle carte pour l'image des engins */
+    .engins-photo-card{background:var(--dark2);border-radius:12px;overflow:hidden;border:1px solid rgba(251,223,0,.18);box-shadow:0 8px 32px rgba(0,0,0,.45);margin-top:1.5rem}
+    .engins-photo-card img{width:100%;display:block;object-fit:cover;max-height:280px}
+
     /* FOOTER */
     footer{background:#1e2028;padding:2rem;border-top:1px solid var(--purple);text-align:center}
     .footer-inner{max-width:980px;margin:0 auto}
@@ -131,6 +136,7 @@
       .hero-traction-text p{margin:0 auto 1.75rem}
       .badge-block{display:none}
       .gammes-grid{grid-template-columns:1fr}
+      .engins-photo-card{margin-top:1rem}
     }
     /* ── Mobile (≤640px) */
     @media(max-width:640px){
@@ -197,13 +203,19 @@
         <a href="index.html#contact" class="btn-outline">Nous contacter</a>
       </div>
     </div>
-    <div class="battery-photo-card">
-      <div class="battery-photo-label">
-        <span class="badge-official-large">Stock disponible — Lyon</span>
-        <p class="battery-photo-caption">Éléments Fiamm Motive Power 2V<br>
-          <span>Gel · AGM · OPzV · Plomb ouvert</span></p>
+    <div class="hero-visuels" style="display:flex; flex-direction:column; gap:1.5rem;"> <!-- Empilement des deux cartes -->
+      <div class="battery-photo-card">
+        <div class="battery-photo-label">
+          <span class="badge-official-large">Stock disponible — Lyon</span>
+          <p class="battery-photo-caption">Éléments Fiamm Motive Power 2V<br>
+            <span>Gel · AGM · OPzV · Plomb ouvert</span></p>
+        </div>
+        <img src="https://github.com/Stank211/Stank211.github.io/blob/main/element2VKitRC.JPG?raw=true" alt="Éléments traction Fiamm Motive Power 2V" class="battery-photo-img">
       </div>
-      <img src="https://github.com/Stank211/Stank211.github.io/blob/main/element2VKitRC.jpg?raw=true" alt="Éléments traction Fiamm Motive Power 2V" class="battery-photo-img">
+      <!-- Nouvelle image engins -->
+      <div class="engins-photo-card">
+        <img src="https://github.com/Stank211/Stank211.github.io/blob/main/engins.png?raw=true" alt="Engins industriels compatibles">
+      </div>
     </div>
     </div>
 </section>
