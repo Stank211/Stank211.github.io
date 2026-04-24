@@ -74,26 +74,99 @@
     .off-card p{color:rgba(255,246,234,.5);font-size:13px;line-height:1.6}
     .off-card strong{color:rgba(255,246,234,.8)}
 
-    /* ---------- IMMAT (EN MAINTENANCE) ---------- */
-    #immat{background:var(--yellow);padding:4rem 0}
-    .immat-inner{text-align:center}
-    .immat-tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:rgba(0,0,0,.5);background:rgba(0,0,0,.08);padding:3px 10px;border-radius:3px;margin-bottom:.6rem}
-    .immat-inner h2{font-family:var(--fd);font-size:44px;color:var(--dark);line-height:1;margin-bottom:.4rem}
-    .immat-inner>p{color:rgba(0,0,0,.55);font-size:15px;margin:0 auto 1.75rem;max-width:550px}
-    
-    /* Barre de recherche */
-    .immat-form{display:flex;max-width:520px;margin:0 auto 1.5rem;border-radius:5px;overflow:hidden;border:2.5px solid var(--dark);background:var(--white); opacity: 0.7;}
-    .immat-flag{background:var(--dark);display:flex;align-items:center;gap:6px;padding:0 14px;font-size:11px;font-weight:700;letter-spacing:1px;color:var(--cream);white-space:nowrap;flex-shrink:0}
-    .flag-fr{width:20px;height:14px;background:linear-gradient(to right,#002395 33%,#fff 33% 66%,#ED2939 66%);border-radius:2px;border:.5px solid rgba(0,0,0,.2)}
-    .immat-input{flex:1;border:none;outline:none;font-family:var(--fd);font-size:24px;letter-spacing:2px;padding:10px 14px;text-transform:uppercase;background:#f5f5f5;color:#999;min-width:0;text-align: center;}
-    .immat-search-btn{background:#666;color:var(--white);border:none;padding:0 22px;font-family:'DM Sans',sans-serif;font-weight:700;font-size:14px;cursor:not-allowed;white-space:nowrap;flex-shrink:0;}
-    
-    /* Box Erreur */
-    .yuasa-fallback-box { background: var(--white); border-radius: 8px; padding: 2rem; box-shadow: 0 8px 30px rgba(0,0,0,0.15); border-left: 5px solid #E11D48; max-width: 600px; margin: 0 auto; text-align: left; }
-    .yuasa-fallback-box h4 { font-size: 18px; color: #E11D48; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; font-weight: 700; }
-    .yuasa-fallback-box p { color: var(--muted); font-size: 14px; margin-bottom: 1rem; line-height: 1.6; }
-    .btn-yuasa-link { display: inline-block; background: #E11D48; color: var(--white); padding: 12px 24px; font-weight: 700; border-radius: 4px; text-decoration: none; transition: all 0.3s ease; }
-    .btn-yuasa-link:hover { background: #BE123C; transform: translateY(-3px); box-shadow: 0 6px 15px rgba(225,29,72,0.3); }
+// ========== CONFIGURATION ==========
+// Proxy CORS gratuit (limité à 100 requêtes/jour, largement suffisant pour un site vitrine)
+const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/';
+
+// API non documentée d'Oscaro - identifie un véhicule à partir de sa plaque
+const OSCARO_API = 'https://www.oscaro.com/api/vehicle/search';
+
+// ========== RECHERCHE PRINCIPALE ==========
+async function searchByPlate() {
+  const input = document.getElementById('immat-input-real');
+  const loader = document.getElementById('immat-loader');
+  const resultDiv = document.getElementById('vehicle-result');
+  const errorDiv = document.getElementById('error-message');
+  const searchBlock = document.getElementById('search-form-block');
+  
+  const rawPlate = input.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  
+  if (rawPlate.length < 4) {
+    alert('Veuillez entrer une plaque valide (ex: AA-123-BB)');
+    return;
+  }
+
+  // Afficher le loader
+  searchBlock.style.display = 'none';
+  resultDiv.style.display = 'none';
+  errorDiv.style.display = 'none';
+  loader.style.display = 'block';
+
+  try {
+    // Étape 1 : Identifier le véhicule via Oscaro
+    const vehicleData = await fetch(`${CORS_PROXY}${OSCARO_API}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plate: rawPlate })
+    }).then(res => res.json());
+
+    loader.style.display = 'none';
+
+    if (vehicleData && vehicleData.vehicle_info) {
+      // Affichage des infos du véhicule
+      document.getElementById('vehicle-label').textContent = vehicleData.vehicle_info;
+      document.getElementById('vehicle-details').textContent = `Énergie : ${vehicleData.energy || 'Non précisée'}`;
+      resultDiv.style.display = 'block';
+
+      // Étape 2 : Construire l'URL de recherche Yuasa avec les infos du véhicule
+      const makeModel = vehicleData.vehicle_info.split(' ').slice(0, 2).join('+');
+      const yuasaUrl = `https://www.yuasa.fr/recherche/?make_model=${encodeURIComponent(makeModel)}`;
+      document.getElementById('btn-yuasa-fallback').href = yuasaUrl;
+
+      document.getElementById('battery-info').innerHTML = 
+        `<p style="font-size:13px;color:var(--muted);">
+          ✅ Véhicule identifié. Cliquez ci-dessous pour voir la batterie compatible sur le configurateur Yuasa :
+        </p>`;
+    } else {
+      throw new Error('Véhicule non trouvé');
+    }
+  } catch (err) {
+    console.error('Erreur oscillo:', err);
+    loader.style.display = 'none';
+    showError('Impossible d’identifier le véhicule. Utilisez le configurateur manuel Yuasa ci-dessous.');
+  }
+}
+
+function showError(msg) {
+  const errorDiv = document.getElementById('error-message');
+  document.getElementById('error-text').textContent = msg;
+  errorDiv.style.display = 'block';
+}
+
+function resetSearch() {
+  document.getElementById('search-form-block').style.display = 'block';
+  document.getElementById('vehicle-result').style.display = 'none';
+  document.getElementById('error-message').style.display = 'none';
+  document.getElementById('immat-loader').style.display = 'none';
+  document.getElementById('immat-input-real').value = '';
+}
+
+function formatImmat(el) {
+  let r = el.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  if (r.length > 0) el.value = r.substring(0, 2);
+  if (r.length > 2) el.value += '-' + r.substring(2, 5);
+  if (r.length > 5) el.value += '-' + r.substring(5, 7);
+}
+
+// Validation avec la touche Entrée
+document.addEventListener('DOMContentLoaded', function() {
+  const input = document.getElementById('immat-input-real');
+  if (input) {
+    input.addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') searchByPlate();
+    });
+  }
+});
 
     /* ---------- MARQUES PREMIUM ---------- */
     #marques{background:var(--dark);padding:4rem 0}
