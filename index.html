@@ -361,7 +361,7 @@
     <div id="search-form-block">
       <div class="immat-form">
         <div class="immat-flag"><div class="flag-fr"></div> &nbsp;FR</div>
-        <input class="immat-input" id="immat-input-real" type="text" placeholder="AA-123-BB" maxlength="9" autocomplete="off" oninput="formatImmat(this)">
+        <input class="immat-input" id="immat-input-real" type="text" placeholder="AA-123-CD" maxlength="9" autocomplete="off" oninput="formatImmat(this)">
         <button class="immat-search-btn" onclick="searchByPlate()">🔍 Rechercher</button>
       </div>
       <p style="font-size:11px;color:rgba(0,0,0,.35);margin-top:.75rem;">Identification via la base officielle SIV (gratuit)</p>
@@ -585,7 +585,7 @@
           (data.year ? '📅 ' + data.year : '');
 
         // Lien Yuasa avec le modèle
-        const yuasaUrl = 'https://www.yuasa.fr/recherche/?q=' + encodeURIComponent(data.vehicle_info.split(' ').slice(0, 3).join(' '));
+        const yuasaUrl = 'https://www.yuasa.com/fr/#vehicle-search' + encodeURIComponent(data.vehicle_info.split(' ').slice(0, 3).join(' '));
         document.getElementById('btn-yuasa-fallback').href = yuasaUrl;
         document.getElementById('battery-info').innerHTML = 
           '<p style="font-size:13px;color:var(--muted);">✅ Cliquez pour voir la batterie compatible sur le configurateur Yuasa :</p>';
